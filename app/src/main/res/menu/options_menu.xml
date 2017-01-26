@@ -15,4 +15,7 @@
     <item
         android:id="@+id/action_add"
         android:title="add new word"/>
+    <item
+        android:id="@+id/action_select_file"
+        android:title="select file"/>
 </menu>

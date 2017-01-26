@@ -1,6 +1,8 @@
 package com.example.ivan.mywords;
 
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.MediaScannerConnection;
 import android.os.Environment;
 import android.support.v7.app.ActionBar;
@@ -28,8 +30,9 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
-    public static final String DIRECTORY_PATH = Environment.getExternalStorageDirectory().toString() + "/myWords";
+    public static final String DIRECTORY_PATH = Environment.getExternalStorageDirectory().toString() + "/myWords/";
     public static final String FILE_NAME = "words.txt";
+    public static final String PATH_PREF_KEY = "filepath";
 
 //    public static final String FILE_PATH = Environment.getExternalStorageDirectory().toString() + "/myWords/words.txt";
 
@@ -43,6 +46,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private boolean translationVisibility = false;
     private boolean isInverted = false;
 
+//    private String currentFilePath = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -54,7 +59,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             Log.d(TAG, "onCreate: " + result);
             MediaScannerConnection.scanFile(this, new String[]{DIRECTORY_PATH}, null, null);
         }
-        File file = new File(DIRECTORY_PATH, FILE_NAME);
+        File file = new File(DIRECTORY_PATH + FILE_NAME);
         if (!file.exists() || !file.isFile()) {
             try {
                 file.createNewFile();
@@ -69,11 +74,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
 
 
+
         tvWord = (TextView) findViewById(R.id.tv_word);
         tvWord.setOnClickListener(this);
-
-        wordsWithTranslations = getWordsList();
-        showWord(position);
+        update();
         findViewById(R.id.activity_main).setOnClickListener(this);
 
         ActionBar actionBar = getSupportActionBar();
@@ -105,11 +109,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 showWord(position);
                 break;
             case R.id.action_update:
-                wordsWithTranslations = getWordsList();
-                if (position >= wordsWithTranslations.size()) {
-                    position = 0;
-                }
-                showWord(position);
+                update();
                 break;
             case R.id.action_delete:
                 deletePosition(position);
@@ -117,23 +117,41 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.action_add:
                 newWord();
                 break;
+            case R.id.action_select_file:
+                selectFile();
+                break;
         }
         return super.onOptionsItemSelected(item);
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == RESULT_OK) {
+            SharedPreferences sPref = getPreferences(MODE_PRIVATE);
+            SharedPreferences.Editor editor = sPref.edit();
+            editor.putString(PATH_PREF_KEY, data.getStringExtra(Intent.EXTRA_TEXT));
+            editor.apply();
+            update();
+        }
+    }
 
-    private String readFile(){
+    private String readFile(String filePath){
+        Log.d(TAG, "readFile: " + filePath);
         try {
-            BufferedReader reader = new BufferedReader(new FileReader(new File(DIRECTORY_PATH, FILE_NAME)));
-            StringBuilder builder = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                builder.append(line);
+            File file = new File(filePath);
+            if (file.exists()) {
+                BufferedReader reader = new BufferedReader(new FileReader(file));
+                StringBuilder builder = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    builder.append(line);
+                }
+                reader.close();
+                return builder.toString();
             }
-            reader.close();
-            return builder.toString();
         } catch (FileNotFoundException e) {
-            Log.d(TAG, "readFile: ");
+            Log.d(TAG, "readFile: exception");
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
@@ -178,7 +196,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void writeWordToFile(String word){
         Log.d(TAG, "writeWordToFile: ");
-        String text = readFile();
+        String text = readFile(getCurrentFilePath());
         try {
             FileWriter writer = new FileWriter(new File(DIRECTORY_PATH, FILE_NAME));
             writer.append(text).append(",").append(word);
@@ -191,7 +209,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private List<String[]> getWordsList() {
-        String text = readFile();
+        String text = readFile(getCurrentFilePath());
         if (text != null) {
             String[] words = text.split(",");
             List<String> wordsArray = Arrays.asList(words);
@@ -202,7 +220,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
             return separatedWordsArray;
         } else {
-            Toast.makeText(this, "error reading file", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "reading error");
             return null;
         }
     }
@@ -251,6 +269,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         });
         dialogBuilder.show();
+    }
+
+    private String getCurrentFilePath(){
+        SharedPreferences sPref = getPreferences(MODE_PRIVATE);
+        return sPref.getString(PATH_PREF_KEY, DIRECTORY_PATH + FILE_NAME);
+    }
+
+    private void update(){
+        setTitle((new File(getCurrentFilePath())).getName());
+        wordsWithTranslations = getWordsList();
+        if (wordsWithTranslations != null) {
+            if (position >= wordsWithTranslations.size()) {
+                position = 0;
+            }
+            showWord(position);
+        } else {
+            Toast.makeText(this, "can't open file", Toast.LENGTH_SHORT).show();
+            selectFile();
+        }
+    }
+
+    private void selectFile() {
+        startActivityForResult(new Intent(this, FileSelectionActivity.class), 101);
     }
 
     @Override
